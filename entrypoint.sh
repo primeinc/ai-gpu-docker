@@ -82,6 +82,7 @@ if [ $ENABLE_DDNS ]; then
   SERVER_NAME=$(cat /etc/servername)
   echo "SERVER_NAME: $SERVER_NAME"
   export_to_bashrc "SERVER_NAME"
+  echo "0.0.0.0 $SERVER_NAME" >> /etc/hosts
 else
   echo "DDNS is disabled, using public IP as servername."
   echo "SERVER_NAME: $SERVER_PUBLIC_IP"

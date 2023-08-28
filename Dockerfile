@@ -18,6 +18,7 @@ RUN apt-get update -y \
         unzip \
         wget \
         grep \
+        nano \
         mawk \
         ffmpeg \
         software-properties-common \

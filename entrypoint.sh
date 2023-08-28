@@ -21,10 +21,14 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 SERVER_PORT=${RUNPOD_TCP_PORT_70000:-7860}
+SERVER_PORT_2=${RUNPOD_TCP_PORT_70001:-7861}
+SERVER_PORT_3=${RUNPOD_TCP_PORT_70002:-7862}
 
 # Using the function to export variables to .bashrc
 export_to_bashrc "SERVER_PUBLIC_IP"
 export_to_bashrc "SERVER_PORT"
+export_to_bashrc "SERVER_PORT_2"
+export_to_bashrc "SERVER_PORT_3"
 export_to_bashrc "RUNPOD_TCP_PORT_70000"
 export_to_bashrc "RUNPOD_TCP_PORT_70001"
 export_to_bashrc "RUNPOD_TCP_PORT_70002"
@@ -33,9 +37,9 @@ echo "$SERVER_PUBLIC_IP" > "/etc/serverpublicip"
 echo "$RUNPOD_TCP_PORT_70000" > "/etc/serverport"
 
 echo "SERVER_PUBLIC_IP: $SERVER_PUBLIC_IP"
-echo "RUNPOD_TCP_PORT_70000: $RUNPOD_TCP_PORT_70000"
-echo "RUNPOD_TCP_PORT_70001: $RUNPOD_TCP_PORT_70001"
-echo "RUNPOD_TCP_PORT_70002: $RUNPOD_TCP_PORT_70002"
+echo "RUNPOD_TCP_PORT_70000 | SERVER_PORT: $RUNPOD_TCP_PORT_70000"
+echo "RUNPOD_TCP_PORT_70001 | SERVER_PORT_2: $RUNPOD_TCP_PORT_70001"
+echo "RUNPOD_TCP_PORT_70002 | SERVER_PORT_3: $RUNPOD_TCP_PORT_70002"
 
 if [ $ENABLE_DDNS ]; then
   NETWORK_DIR=${NETWORK_DIR:-/workspace}

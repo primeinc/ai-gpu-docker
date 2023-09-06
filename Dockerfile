@@ -41,11 +41,37 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # add alias for quickly activating venv
     && echo "alias venv='source venv/bin/activate'" >> /etc/bash.bashrc
 
+# COPY ./wheelhouse /root/wheelhouse
+# RUN apt-get update && apt-get install -y --no-install-recommends \
+#     libcairo2-dev \
+#     python3.10-apt \
+#     libgirepository1.0-dev \
+#     libdbus-1-dev \
+#     pkg-config \
+#     apt-utils && \
+#     pip_freeze_output=$(pip freeze) && \
+#     cleaned_output=$(echo "$pip_freeze_output" | sed '/@ git+/!s/+\([^ ]\+\)//g') && \
+#     cleaned_output=$(echo "$cleaned_output" | grep -v 'python-apt==2.4.0') && \
+#     echo "$cleaned_output" > cleaned_requirements.txt && \
+#     python -m pip wheel --wheel-dir=/root/wheelhouse -r cleaned_requirements.txt && \
+#     pip config set global.find-links "file:///root/wheelhouse" && \
+#     pip config list && \
+#     rm cleaned_requirements.txt
 # Download and install python requirements for common ai libraries
-RUN wget -O requirements.txt https://raw.githubusercontent.com/C0untFloyd/roop-unleashed/main/requirements.txt && \
+# remove first line from kohya-runpod-requirements.txt as its invalid and already installed, Replace spaces with newlines
+# Move the cleaned file back
+RUN wget -O roop-requirements.txt https://raw.githubusercontent.com/C0untFloyd/roop-unleashed/main/requirements.txt && \
     wget -O automatic1111-requirements.txt https://raw.githubusercontent.com/AUTOMATIC1111/stable-diffusion-webui/master/requirements.txt && \
+    wget -O kohya-runpod-requirements.txt https://raw.githubusercontent.com/bmaltais/kohya_ss/master/requirements_runpod.txt && \
+    sed -i '1d' /kohya-runpod-requirements.txt && \ 
+    awk '{ for(i=1;i<=NF;i++) print $i }' /kohya-runpod-requirements.txt | grep -v '^-r\|requirements.txt' > /tmp/cleaned_requirements.txt && \
+    mv /tmp/cleaned_requirements.txt /kohya-runpod-requirements.txt && \
+    wget -O kohya-requirements.txt https://raw.githubusercontent.com/bmaltais/kohya_ss/master/requirements.txt && \
+    sed -i '$d' kohya-requirements.txt && \
     transformers_version=$(grep "transformers==" automatic1111-requirements.txt | awk -F '==' '{print $2}') && \
-    pip install --prefer-binary -r /requirements.txt  && \
+    pip install --prefer-binary -r /roop-requirements.txt  && \
+    pip install --prefer-binary -r /kohya-runpod-requirements.txt  && \
+    pip install --prefer-binary -r /kohya-requirements.txt  && \
     pip install "transformers==$transformers_version" \
         diffusers \
         invisible-watermark \
@@ -55,8 +81,10 @@ RUN wget -O requirements.txt https://raw.githubusercontent.com/C0untFloyd/roop-u
         certifi \
         --prefer-binary && \
     pip install git+https://github.com/crowsonkb/k-diffusion.git --prefer-binary && \    
-    rm /requirements.txt /automatic1111-requirements.txt && \
-    rm -rf /root/.cache/pip
+    rm /roop-requirements.txt /automatic1111-requirements.txt && \
+    rm /kohya-runpod-requirements.txt /kohya-requirements.txt && \
+    rm -rf /root/.cache/pip && \
+    rm -rf /var/lib/apt/lists/* 
 
 # Expose ports
 EXPOSE 22 7860

@@ -26,6 +26,8 @@ SERVER_PORT_2=${RUNPOD_TCP_PORT_70001:-7861}
 SERVER_PORT_3=${RUNPOD_TCP_PORT_70002:-7862}
 SERVER_PORT_4=${RUNPOD_TCP_PORT_70003:-7863}
 
+TF_CPP_MIN_LOG_LEVEL=2
+
 # Using the function to export variables to .bashrc
 export_to_bashrc "SERVER_PUBLIC_IP"
 export_to_bashrc "SERVER_PORT"
@@ -36,6 +38,9 @@ export_to_bashrc "RUNPOD_TCP_PORT_70000"
 export_to_bashrc "RUNPOD_TCP_PORT_70001"
 export_to_bashrc "RUNPOD_TCP_PORT_70002"
 export_to_bashrc "RUNPOD_TCP_PORT_70003"
+export_to_bashrc "LD_PRELOAD"
+export_to_bashrc "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"
+export_to_bashrc "TF_CPP_MIN_LOG_LEVEL"
 
 echo "$SERVER_PUBLIC_IP" > "/etc/serverpublicip"
 echo "$SERVER_PORT" > "/etc/serverport"
@@ -113,6 +118,30 @@ ln -sf /workspace/.bash_history_shared ~/.bash_history
 PROMPT_COMMAND="echo \$(date +%s) > /tmp/last_command_time; history -a; $PROMPT_COMMAND"
 ' >> /root/.bashrc
 
+mkdir -p /root/.cache/huggingface/accelerate
+
+echo '
+compute_environment: LOCAL_MACHINE
+distributed_type: 'NO'
+downcast_bf16: 'no'
+gpu_ids: all
+machine_rank: 0
+main_training_function: main
+mixed_precision: bf16
+num_machines: 1
+num_processes: 1
+rdzv_backend: static
+same_network: true
+tpu_env: []
+tpu_use_cluster: false
+tpu_use_sudo: false
+use_cpu: false
+' > /root/.cache/huggingface/accelerate/default_config.yaml
+
+LD_PRELOAD=libtcmalloc.so
+PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+CUDNN_PATH=$(dirname $(python -c "import nvidia.cudnn;print(nvidia.cudnn.__file__)"))
+export LD_LIBRARY_PATH=$CUDNN_PATH/lib:$LD_LIBRARY_PATH
 
 python "/root/auto_tls.py"
 if [ $? -ne 0 ]; then

@@ -1,5 +1,6 @@
 FROM nvidia/cuda:11.8.0-devel-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Europe/London
 
 # Use bash instead of sh
 SHELL ["/bin/bash", "-c"]
@@ -20,26 +21,48 @@ RUN apt-get update -y \
         grep \
         nano \
         mawk \
+        htop \
         ffmpeg \
         software-properties-common \
         openssh-server \
+        libgl1 \
+        libglib2.0-0 \
+        libgoogle-perftools-dev \
     && mkdir /var/run/sshd \
     && ssh-keygen -A \
     && apt-get clean && rm -rf /var/lib/apt/lists/* \
     && echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
 
 # Install python3.10 * pip
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && \
+    add-apt-repository ppa:deadsnakes/ppa && \
+    apt-get install -y --no-install-recommends \
     python3.10 \
     python3.10-distutils \
     python3.10-dev \
     python3.10-venv \
-    python3-pip \
-    && rm -rf /var/lib/apt/lists/* \
+    python3.10-tk \
+    python3-html5lib \
+    python3-apt \
+    python3-pip && \
+    rm -rf /var/lib/apt/lists/* && \
     # Create a symlink for python3 to python
-    && update-alternatives --install /usr/bin/python python /usr/bin/python3 1 \
+    update-alternatives --install /usr/bin/python python /usr/bin/python3 1 && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 3 && \
+    update-alternatives --set python3 /usr/bin/python3.10 && \
+    update-alternatives --set cuda /usr/local/cuda-11.8 && \
     # add alias for quickly activating venv
-    && echo "alias venv='source venv/bin/activate'" >> /etc/bash.bashrc
+    echo "alias venv='source venv/bin/activate'" >> /etc/bash.bashrc
+
+# Replace pillow with pillow-simd
+RUN apt-get update && \
+    apt-get install libjpeg-dev -y && \
+    python -m pip uninstall -y pillow && \
+    CC="cc -mavx2" python -m pip install -U --force-reinstall pillow-simd
+
+# Fix missing libnvinfer7
+RUN ln -s /usr/lib/x86_64-linux-gnu/libnvinfer.so /usr/lib/x86_64-linux-gnu/libnvinfer.so.7 && \
+    ln -s /usr/lib/x86_64-linux-gnu/libnvinfer_plugin.so /usr/lib/x86_64-linux-gnu/libnvinfer_plugin.so.7
 
 # COPY ./wheelhouse /root/wheelhouse
 # RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -103,6 +126,9 @@ RUN mkdir -p /root/.ssh \
 
 # Make the scripts executable
 RUN chmod +x /entrypoint.sh && chmod +x /root/idlecheck.sh
+
+ENV LD_PRELOAD=libtcmalloc.so
+ENV PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 
 # Set the entrypoint
 ENTRYPOINT ["/entrypoint.sh"]

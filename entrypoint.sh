@@ -4,15 +4,22 @@
 export_to_bashrc() {
   local var_name="$1"
   local var_value="${!1}"
-  echo "export $var_name=\"$var_value\"" >> "/root/.bashrc"
+  echo "export $var_name=\"$var_value\"" >>"/root/.bashrc"
   export $var_name="$var_value"
+}
+
+save_to_bashrc() {
+  local var="$1"
+  echo "$var" >>"/root/.bashrc"
 }
 
 for key in "$PUBLIC_KEY" "$RUNPOD_SSH_PUBLIC_KEY"; do
   if [ -n "$key" ]; then
-    echo "$key" >> "/root/.ssh/authorized_keys"
+    echo "$key" >>"/root/.ssh/authorized_keys"
   fi
 done
+
+echo $(date +%s) >/tmp/container_start_time
 
 # Get the IP address & 1:1 ports of the container
 SERVER_PUBLIC_IP=$(curl -s https://api.ipify.org)
@@ -27,6 +34,10 @@ SERVER_PORT_3=${RUNPOD_TCP_PORT_70002:-7862}
 SERVER_PORT_4=${RUNPOD_TCP_PORT_70003:-7863}
 
 TF_CPP_MIN_LOG_LEVEL=2
+LD_PRELOAD=libtcmalloc.so
+PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+CUDNN_PATH=$(dirname $(python -c "import nvidia.cudnn;print(nvidia.cudnn.__file__)"))
+LD_LIBRARY_PATH=$CUDNN_PATH/lib:$LD_LIBRARY_PATH
 
 # Using the function to export variables to .bashrc
 export_to_bashrc "SERVER_PUBLIC_IP"
@@ -41,9 +52,49 @@ export_to_bashrc "RUNPOD_TCP_PORT_70003"
 export_to_bashrc "LD_PRELOAD"
 export_to_bashrc "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"
 export_to_bashrc "TF_CPP_MIN_LOG_LEVEL"
+export_to_bashrc "LD_LIBRARY_PATH"
+echo "set completion-ignore-case on" >>/root/.inputrc
+save_to_bashrc "alias run-sdweb=\"bash /workspace/sdweb.sh\""
+save_to_bashrc "alias run-roop=\"bash /workspace/roop.sh\""
+save_to_bashrc "alias run-syncthing=\"bash /workspace/syncthing.sh\""
+save_to_bashrc "alias cd-sdweb=\"cd /workspace/sd-webui\""
+save_to_bashrc "alias cd-roop=\"cd /workspace/roop-unleashed\""
+save_to_bashrc "alias cd-syncthing=\"cd /workspace/syncthing\""
+save_to_bashrc "cd /workspace"
+save_to_bashrc '
+    if [ -e /root/banner.sh ]
+    then
+      chmod 755 /root/banner.sh
+      bash /root/banner.sh
+    fi
+'
+save_to_bashrc '
+IDLE_KILL_MINUTES_FILE="/tmp/idle_kill_minutes"
+IDLE_STOP_MINUTES_FILE="/tmp/idle_stop_minutes"
 
-echo "$SERVER_PUBLIC_IP" > "/etc/serverpublicip"
-echo "$SERVER_PORT" > "/etc/serverport"
+function kill-minutes()
+{
+  if [[ -z $1 ]]; then
+    echo "Please provide the number of minutes for IDLE_KILL_MINUTES."
+    return 1
+  fi
+  echo "$1" > "$IDLE_KILL_MINUTES_FILE"
+  echo "IDLE_KILL_MINUTES set to $1"
+}
+
+function stop-minutes()
+{
+  if [[ -z $1 ]]; then
+    echo "Please provide the number of minutes for IDLE_STOP_MINUTES."
+    return 1
+  fi
+  echo "$1" > "$IDLE_STOP_MINUTES_FILE"
+  echo "IDLE_STOP_MINUTES set to $1"
+}
+'
+
+echo "$SERVER_PUBLIC_IP" >"/etc/serverpublicip"
+echo "$SERVER_PORT" >"/etc/serverport"
 
 echo "SERVER_PUBLIC_IP: $SERVER_PUBLIC_IP"
 echo "RUNPOD_TCP_PORT_70000 | SERVER_PORT: $RUNPOD_TCP_PORT_70000"
@@ -52,6 +103,8 @@ echo "RUNPOD_TCP_PORT_70002 | SERVER_PORT_3: $RUNPOD_TCP_PORT_70002"
 echo "RUNPOD_TCP_PORT_70003 | SERVER_PORT_4: $RUNPOD_TCP_PORT_70003"
 
 if [ $ENABLE_DDNS ]; then
+  echo "DDNS is enabled."
+  echo "Checking for updates to DDNS app."
   NETWORK_DIR=${NETWORK_DIR:-/workspace}
   DDNS_GIT_DIR_NAME=${DDNS_GIT_DIR_NAME:-runpod-cloudflare-ddns}
   DDNS_GIT_DIR="$NETWORK_DIR/$DDNS_GIT_DIR_NAME"
@@ -85,24 +138,30 @@ if [ $ENABLE_DDNS ]; then
   python main.py
   if [ $? -ne 0 ]; then
     echo "Unable to retrieve DDNS domain name."
-    echo "Bypassing configuration and launching SSH Server."
-    /usr/sbin/sshd -D
-    exit 1
+    echo "Bypassing DDNS configuration and continuing."
+    ENABLE_DDNS=false
   fi
   SERVER_NAME=$(cat /etc/servername)
   echo "SERVER_NAME: $SERVER_NAME"
   export_to_bashrc "SERVER_NAME"
-  echo "0.0.0.0 $SERVER_NAME" >> /etc/hosts
-else
-  echo "DDNS is disabled, using public IP as servername."
-  echo "SERVER_NAME: $SERVER_PUBLIC_IP"
-  echo "$SERVER_PUBLIC_IP" > "/etc/servername"
-  echo "export SERVER_NAME=$SERVER_PUBLIC_IP" >> "/root/.bashrc"
+  echo "0.0.0.0 $SERVER_NAME" >>/etc/hosts
+fi
+
+if ! [ $ENABLE_DDNS ]; then
+  SERVER_PUBLIC_IP="0.0.0.0"
+  SERVER_NAME="0.0.0.0"
+  echo "$SERVER_NAME" >"/etc/servername"
+  echo "DDNS is disabled, using $SERVER_NAME as servername & public ip."
+  export_to_bashrc "SERVER_NAME"
+  export_to_bashrc "SERVER_PUBLIC_IP"
 fi
 
 # Generate tls certificate files
 # Will export the following variables: SERVER_KEY SERVER_CERT SERVER_BUNDLE
 cd ~
+
+git config --global core.autocrlf input
+git config --global core.eol lf
 
 # Create a shared bash history file
 echo '
@@ -116,7 +175,7 @@ ln -sf /workspace/.bash_history_shared ~/.bash_history
 
 # Update the history file in real-time
 PROMPT_COMMAND="echo \$(date +%s) > /tmp/last_command_time; history -a; $PROMPT_COMMAND"
-' >> /root/.bashrc
+' >>/root/.bashrc
 
 mkdir -p /root/.cache/huggingface/accelerate
 
@@ -136,12 +195,7 @@ tpu_env: []
 tpu_use_cluster: false
 tpu_use_sudo: false
 use_cpu: false
-' > /root/.cache/huggingface/accelerate/default_config.yaml
-
-LD_PRELOAD=libtcmalloc.so
-PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
-CUDNN_PATH=$(dirname $(python -c "import nvidia.cudnn;print(nvidia.cudnn.__file__)"))
-export LD_LIBRARY_PATH=$CUDNN_PATH/lib:$LD_LIBRARY_PATH
+' >/root/.cache/huggingface/accelerate/default_config.yaml
 
 python "/root/auto_tls.py"
 if [ $? -ne 0 ]; then
@@ -150,10 +204,14 @@ if [ $? -ne 0 ]; then
   echo "SERVER_KEY SERVER_CERT SERVER_BUNDLE"
 fi
 
-if command -v runpodctl > /dev/null 2>&1; then
+if command -v runpodctl >/dev/null 2>&1; then
   echo "Runpod's platform detected."
   service ssh start
-  while true; do bash ./idlecheck.sh; sleep 5m; done
+  tail -n 1000 /workspace/idlecheck.log >/workspace/temp.log && mv /workspace/temp.log /workspace/idlecheck.log
+  while true; do
+    bash ./idlecheck.sh
+    sleep 1m
+  done
 else
   echo "Not running on Runpod."
   echo "Skipping idlecheck.sh and launching SSH Server."

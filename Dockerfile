@@ -9,25 +9,27 @@ SHELL ["/bin/bash", "-c"]
 RUN apt-get update -y \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
-        curl \
-        ca-certificates \
-        sudo \
-        git \
-        bzip2 \
-        binutils \
-        bash \
-        unzip \
-        wget \
-        grep \
-        nano \
-        mawk \
-        htop \
-        ffmpeg \
-        software-properties-common \
-        openssh-server \
-        libgl1 \
-        libglib2.0-0 \
-        libgoogle-perftools-dev \
+    curl \
+    ca-certificates \
+    sudo \
+    git \
+    bzip2 \
+    binutils \
+    bash \
+    unzip \
+    wget \
+    grep \
+    nano \
+    mawk \
+    htop \
+    ffmpeg \
+    software-properties-common \
+    openssh-server \
+    libgl1 \
+    libglib2.0-0 \
+    libgoogle-perftools-dev \
+    dos2unix \
+    ncdu \
     && mkdir /var/run/sshd \
     && ssh-keygen -A \
     && apt-get clean && rm -rf /var/lib/apt/lists/* \
@@ -64,47 +66,48 @@ RUN apt-get update && \
 RUN ln -s /usr/lib/x86_64-linux-gnu/libnvinfer.so /usr/lib/x86_64-linux-gnu/libnvinfer.so.7 && \
     ln -s /usr/lib/x86_64-linux-gnu/libnvinfer_plugin.so /usr/lib/x86_64-linux-gnu/libnvinfer_plugin.so.7
 
-# COPY ./wheelhouse /root/wheelhouse
-# RUN apt-get update && apt-get install -y --no-install-recommends \
-#     libcairo2-dev \
-#     python3.10-apt \
-#     libgirepository1.0-dev \
-#     libdbus-1-dev \
-#     pkg-config \
-#     apt-utils && \
-#     pip_freeze_output=$(pip freeze) && \
-#     cleaned_output=$(echo "$pip_freeze_output" | sed '/@ git+/!s/+\([^ ]\+\)//g') && \
-#     cleaned_output=$(echo "$cleaned_output" | grep -v 'python-apt==2.4.0') && \
-#     echo "$cleaned_output" > cleaned_requirements.txt && \
-#     python -m pip wheel --wheel-dir=/root/wheelhouse -r cleaned_requirements.txt && \
-#     pip config set global.find-links "file:///root/wheelhouse" && \
-#     pip config list && \
-#     rm cleaned_requirements.txt
-# Download and install python requirements for common ai libraries
-# remove first line from kohya-runpod-requirements.txt as its invalid and already installed, Replace spaces with newlines
-# Move the cleaned file back
+# Download requirement files
 RUN wget -O roop-requirements.txt https://raw.githubusercontent.com/C0untFloyd/roop-unleashed/main/requirements.txt && \
     wget -O automatic1111-requirements.txt https://raw.githubusercontent.com/AUTOMATIC1111/stable-diffusion-webui/master/requirements.txt && \
     wget -O kohya-runpod-requirements.txt https://raw.githubusercontent.com/bmaltais/kohya_ss/master/requirements_runpod.txt && \
-    sed -i '1d' /kohya-runpod-requirements.txt && \ 
+    wget -O kohya-requirements.txt https://raw.githubusercontent.com/bmaltais/kohya_ss/master/requirements.txt 
+
+# Clean and move kohya-runpod-requirements
+RUN sed -i '1d' /kohya-runpod-requirements.txt && \
     awk '{ for(i=1;i<=NF;i++) print $i }' /kohya-runpod-requirements.txt | grep -v '^-r\|requirements.txt' > /tmp/cleaned_requirements.txt && \
     mv /tmp/cleaned_requirements.txt /kohya-runpod-requirements.txt && \
-    wget -O kohya-requirements.txt https://raw.githubusercontent.com/bmaltais/kohya_ss/master/requirements.txt && \
-    sed -i '$d' kohya-requirements.txt && \
-    transformers_version=$(grep "transformers==" automatic1111-requirements.txt | awk -F '==' '{print $2}') && \
-    pip install --prefer-binary -r /roop-requirements.txt  && \
-    pip install --prefer-binary -r /kohya-runpod-requirements.txt  && \
-    pip install --prefer-binary -r /kohya-requirements.txt  && \
+    sed -i '$d' kohya-requirements.txt 
+
+# Stage 1: Install requirements from roop-requirements.txt
+RUN pip install --prefer-binary -r /roop-requirements.txt && \
+    rm -rf /root/.cache/pip
+
+# Stage 2: Install requirements from kohya-runpod-requirements.txt
+RUN pip install --prefer-binary -r /kohya-runpod-requirements.txt && \
+    rm -rf /root/.cache/pip
+
+# Stage 3: Install requirements from kohya-requirements.txt
+RUN pip install --prefer-binary -r /kohya-requirements.txt && \
+    rm -rf /root/.cache/pip
+
+# Stage 4: Install transformers and other packages
+RUN transformers_version=$(grep "transformers==" automatic1111-requirements.txt | awk -F '==' '{print $2}') && \
     pip install "transformers==$transformers_version" \
-        diffusers \
-        invisible-watermark \
-        requests \
-        cloudflare \
-        certipie \
-        certifi \
-        --prefer-binary && \
-    pip install git+https://github.com/crowsonkb/k-diffusion.git --prefer-binary && \    
-    rm /roop-requirements.txt /automatic1111-requirements.txt && \
+    diffusers \
+    invisible-watermark \
+    requests \
+    cloudflare \
+    certipie \
+    certifi \
+    --prefer-binary && \
+    rm -rf /root/.cache/pip
+
+# Install additional package
+RUN pip install git+https://github.com/crowsonkb/k-diffusion.git --prefer-binary && \
+    rm -rf /root/.cache/pip
+
+# Remove requirement files and clean cache
+RUN rm /roop-requirements.txt /automatic1111-requirements.txt && \
     rm /kohya-runpod-requirements.txt /kohya-requirements.txt && \
     rm -rf /root/.cache/pip && \
     rm -rf /var/lib/apt/lists/* 
@@ -116,6 +119,8 @@ EXPOSE 22 7860
 COPY entrypoint.sh /entrypoint.sh
 COPY idlecheck.sh /root/idlecheck.sh
 COPY auto_tls.py /root/auto_tls.py
+COPY random_banner.txt /tmp/random_banner.txt
+COPY banner.sh /root/banner.sh
 
 # Set proper permissions for the .ssh directory and authorized_keys file
 RUN mkdir -p /root/.ssh \

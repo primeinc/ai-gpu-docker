@@ -102,7 +102,7 @@ echo "RUNPOD_TCP_PORT_70001 | SERVER_PORT_2: $RUNPOD_TCP_PORT_70001"
 echo "RUNPOD_TCP_PORT_70002 | SERVER_PORT_3: $RUNPOD_TCP_PORT_70002"
 echo "RUNPOD_TCP_PORT_70003 | SERVER_PORT_4: $RUNPOD_TCP_PORT_70003"
 
-if [ $ENABLE_DDNS ]; then
+if [ "$ENABLE_DDNS" = "true" ] || [ "$ENABLE_DDNS" = "1" ]; then
   echo "DDNS is enabled."
   echo "Checking for updates to DDNS app."
   NETWORK_DIR=${NETWORK_DIR:-/workspace}
@@ -135,19 +135,25 @@ if [ $ENABLE_DDNS ]; then
   # Change to the directory
   cd "$DDNS_GIT_DIR"
   # Generate a DDNS fqdn
-  python main.py
+  timeout 15s python main.py
   if [ $? -ne 0 ]; then
-    echo "Unable to retrieve DDNS domain name."
+    if [ $? -eq 124 ]; then
+      echo "Timeout occurred after 30 seconds."
+    else
+      echo "Unable to retrieve DDNS domain name."
+    fi
     echo "Bypassing DDNS configuration and continuing."
-    ENABLE_DDNS=false
+    unset ENABLE_DDNS
+  else
+    SERVER_NAME=$(cat /etc/servername)
+    echo "SERVER_NAME: $SERVER_NAME"
+    export_to_bashrc "SERVER_NAME"
+    echo "0.0.0.0 $SERVER_NAME" >>/etc/hosts
   fi
-  SERVER_NAME=$(cat /etc/servername)
-  echo "SERVER_NAME: $SERVER_NAME"
-  export_to_bashrc "SERVER_NAME"
-  echo "0.0.0.0 $SERVER_NAME" >>/etc/hosts
+
 fi
 
-if ! [ $ENABLE_DDNS ]; then
+if [ -z "$ENABLE_DDNS" ] || [ "$ENABLE_DDNS" = "false" ] || [ "$ENABLE_DDNS" = "0" ]; then
   SERVER_PUBLIC_IP="0.0.0.0"
   SERVER_NAME="0.0.0.0"
   echo "$SERVER_NAME" >"/etc/servername"

@@ -6,7 +6,7 @@ WEBUI_FILE="$WORKSPACE_DIR/webui.sh"
 WEBUI_USER_FILE="$WORKSPACE_DIR/webui-user.sh"
 
 # Replacement values
-VENV_DIR=""
+VENV_DIR="__UNSET__"
 USE_ACCELERATE="True"
 
 # Check required variables
@@ -29,30 +29,31 @@ enable_run_as_root() {
 # Update command line args
 update_command_line_args() {
   local args="
-    --server-name $SERVER_NAME 
-    --port $SERVER_PORT 
-    --disable-tls-verify 
-    --listen 
-    --api 
-    --allow-code 
-    --enable-insecure-extension-access 
-    --xformers 
-    --no-progressbar-hiding 
-    --theme dark 
+    --server-name $SERVER_NAME
+    --port $SERVER_PORT
+    --disable-tls-verify
+    --listen
+    --api
+    --allow-code
+    --enable-insecure-extension-access
+    --xformers
+    --no-progressbar-hiding
+    --theme dark
     --upcast-sampling
     "
 
   # Trim leading and trailing whitespaces and join lines into a single line
-  args=$(echo "$args" | tr -d '\n' | sed 's/^[ \t]*//;s/[ \t]*$//')
+  args=$(echo "$args" | tr -d '\n' | sed 's/^[ \t]*//;s/[ \t]*$//;s/[ \t]\+/ /g')
 
   # Append TLS related args if certs are provided
   if [[ -n "$SERVER_CERT" && -n "$SERVER_KEY" ]]; then
     args="$args --tls-keyfile $SERVER_KEY --tls-certfile $SERVER_CERT"
   fi
 
+  echo "Starting with command line args: $args"
   # Replace or append args in file
   grep -q "COMMANDLINE_ARGS=" "$WEBUI_USER_FILE" &&
-    sed -i "s/^\(\#\)export COMMANDLINE_ARGS=.*$/export COMMANDLINE_ARGS=\"$args\"/" "$WEBUI_USER_FILE" ||
+    sed -i "s/#\?export COMMANDLINE_ARGS=.*$/export COMMANDLINE_ARGS=\"$args\"/" "$WEBUI_USER_FILE" ||
     echo "export COMMANDLINE_ARGS=\"$args\"" >>"$WEBUI_USER_FILE"
 }
 

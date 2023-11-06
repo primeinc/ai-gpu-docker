@@ -54,9 +54,11 @@ export_to_bashrc "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"
 export_to_bashrc "TF_CPP_MIN_LOG_LEVEL"
 export_to_bashrc "LD_LIBRARY_PATH"
 echo "set completion-ignore-case on" >>/root/.inputrc
-save_to_bashrc "alias run-sdweb=\"bash /workspace/sdweb.sh\""
+save_to_bashrc "alias run-sdweb=\"bash /root/scripts/start-sdweb.sh\""
+save_to_bashrc "alias run-lora-sdweb=\"bash /root/scripts/start-sdweb.sh --lora-cache\""
 save_to_bashrc "alias run-roop=\"bash /workspace/roop.sh\""
 save_to_bashrc "alias run-syncthing=\"bash /workspace/syncthing.sh\""
+save_to_bashrc "alias lora-sync=\"bash /root/scripts/lora-sync.sh\""
 save_to_bashrc "alias cd-sdweb=\"cd /workspace/sd-webui\""
 save_to_bashrc "alias cd-roop=\"cd /workspace/roop-unleashed\""
 save_to_bashrc "alias cd-syncthing=\"cd /workspace/syncthing\""
@@ -135,12 +137,12 @@ if [ "$ENABLE_DDNS" = "true" ] || [ "$ENABLE_DDNS" = "1" ]; then
   # Change to the directory
   cd "$DDNS_GIT_DIR"
   # Generate a DDNS fqdn
-  timeout 15s python main.py
+  timeout 60s python main.py
   if [ $? -ne 0 ]; then
     if [ $? -eq 124 ]; then
       echo "Timeout occurred after 30 seconds."
     else
-      echo "Unable to retrieve DDNS domain name."
+      echo "60 second timeout, unable to retrieve DDNS domain name."
     fi
     echo "Bypassing DDNS configuration and continuing."
     unset ENABLE_DDNS

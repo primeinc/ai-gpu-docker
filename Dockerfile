@@ -30,6 +30,7 @@ RUN apt-get update -y \
     libgoogle-perftools-dev \
     dos2unix \
     ncdu \
+    rsync \
     && mkdir /var/run/sshd \
     && ssh-keygen -A \
     && apt-get clean && rm -rf /var/lib/apt/lists/* \
@@ -112,6 +113,8 @@ RUN rm /roop-requirements.txt /automatic1111-requirements.txt && \
     rm -rf /root/.cache/pip && \
     rm -rf /var/lib/apt/lists/* 
 
+RUN apt-get update
+
 # Expose ports
 EXPOSE 22 7860
 
@@ -121,13 +124,15 @@ COPY idlecheck.sh /root/idlecheck.sh
 COPY auto_tls.py /root/auto_tls.py
 COPY random_banner.txt /tmp/random_banner.txt
 COPY banner.sh /root/banner.sh
+COPY scripts /root/scripts
 
 # Set proper permissions for the .ssh directory and authorized_keys file
 RUN mkdir -p /root/.ssh \
     && chmod 700 /root/.ssh \
     && touch /root/.ssh/authorized_keys \
     && chmod 600 /root/.ssh/authorized_keys \
-    && chown -R root:root /root/.ssh
+    && chown -R root:root /root/.ssh \
+    && find /root/scripts/ -type f -exec chmod +x {} \;
 
 # Make the scripts executable
 RUN chmod +x /entrypoint.sh && chmod +x /root/idlecheck.sh

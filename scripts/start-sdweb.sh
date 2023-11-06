@@ -8,6 +8,11 @@ WEBUI_USER_FILE="$WORKSPACE_DIR/webui-user.sh"
 # Replacement values
 VENV_DIR="__UNSET__"
 USE_ACCELERATE="True"
+USE_LORA_CACHE=false
+LORA_CACHE_DIR="/tmp/lora_cache"
+DEFAULT_LORA_DIR="/workspace/models/lora"
+
+pip install httpx==0.24.1
 
 # Check required variables
 check_required_variables() {
@@ -37,10 +42,15 @@ update_command_line_args() {
     --allow-code
     --enable-insecure-extension-access
     --xformers
-    --no-progressbar-hiding
     --theme dark
     --upcast-sampling
     "
+
+  if $USE_LORA_CACHE; then
+    args="$args --lora-dir $LORA_CACHE_DIR"
+  else
+    args="$args --lora-dir $DEFAULT_LORA_DIR"
+  fi
 
   # Trim leading and trailing whitespaces and join lines into a single line
   args=$(echo "$args" | tr -d '\n' | sed 's/^[ \t]*//;s/[ \t]*$//;s/[ \t]\+/ /g')
@@ -53,8 +63,8 @@ update_command_line_args() {
   echo "Starting with command line args: $args"
   # Replace or append args in file
   grep -q "COMMANDLINE_ARGS=" "$WEBUI_USER_FILE" &&
-    sed -i "s/#\?export COMMANDLINE_ARGS=.*$/export COMMANDLINE_ARGS=\"$args\"/" "$WEBUI_USER_FILE" ||
-    echo "export COMMANDLINE_ARGS=\"$args\"" >>"$WEBUI_USER_FILE"
+    sed -i "s|#\?export COMMANDLINE_ARGS=.*$|export COMMANDLINE_ARGS=\"$args\"|" "$WEBUI_USER_FILE"
+  echo "export COMMANDLINE_ARGS=\"$args\"" >>"$WEBUI_USER_FILE"
 }
 
 # Update other settings
@@ -81,5 +91,19 @@ main() {
   bash "$WEBUI_FILE"
 }
 
+# Argument parser
+while [ "$#" -gt 0 ]; do
+  case $1 in
+  --lora-cache)
+    USE_LORA_CACHE=true
+    shift
+    ;;
+  *)
+    # If you don't want to exit the script with an error for unknown arguments, remove the next 3 lines.
+    echo "Unknown argument: $1"
+    exit 1
+    ;;
+  esac
+done
 # Invoke main
 main
